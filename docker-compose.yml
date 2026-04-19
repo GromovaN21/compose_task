@@ -1,0 +1,79 @@
+services:
+  nginx:
+    image: nginx:1.28
+    container_name: test-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/:/etc/nginx/conf.d/
+    networks:
+      - frontend
+    environment:
+      - PORT=$PORT
+    depends_on:
+      app:
+        condition: service_healthy
+    command: /bin/bash -c "envsubst '$${PORT}' < /etc/nginx/conf.d/nginx.conf.template > /etc/nginx/conf.d/nginx.conf && nginx -g 'daemon off;'"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  app:
+    build: ./app
+    container_name: test-app
+    command: python app.py
+    environment:
+      - APP_NAME=$APP_NAME
+      - DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@test-pg:$DB_PORT/postgres
+      - REDIS_URL=$REDIS_URL
+      - PORT=$PORT
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:$PORT/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  postgres:
+    image: postgres:15.17-alpine3.23
+    container_name: test-pg
+    environment:
+      - POSTGRES_DB=$DB_NAME
+      - POSTGRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+    volumes:
+      - pgdata:/var/lib/postgresql/
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
+      timeout: 10s
+  redis:
+    image: redis:7.4
+    container_name: test-redis
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 5s
+      retries: 3
+      start_period: 10s
+      timeout: 2s
+networks:
+  frontend:
+    name: frontend
+  backend:
+    name: backend
+volumes:
+  pgdata:
