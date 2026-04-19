@@ -1,5 +1,6 @@
 # 1. Клонирование репозитория
 git clone https://github.com/GromovaN21/compose_task
+
 cd compose_task
 
 # 2. Создать .env 
